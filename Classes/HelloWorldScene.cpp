@@ -2,6 +2,7 @@
 
 USING_NS_CC;
 
+
 Scene* HelloWorld::createScene()
 {
     // 'scene' is an autorelease object
@@ -31,61 +32,98 @@ bool HelloWorld::init()
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
 
     /////////////////////////////
-    // 2. add a menu item with "X" image, which is clicked to quit the program
-    //    you may modify it.
+    // 3. 加载loading界面精灵帧缓存
 
-    // add a "close" icon to exit the progress. it's an autorelease object
-    auto closeItem = MenuItemImage::create(
-                                           "CloseNormal.png",
-                                           "CloseSelected.png",
-                                           CC_CALLBACK_1(HelloWorld::menuCloseCallback, this));
+    SpriteFrameCache::getInstance()->addSpriteFramesWithFile("texture/loading_texture.plist");
     
-	closeItem->setPosition(Vec2(origin.x + visibleSize.width - closeItem->getContentSize().width/2 ,
-                                origin.y + closeItem->getContentSize().height/2));
-
-    // create menu, it's an autorelease object
-    auto menu = Menu::create(closeItem, NULL);
-    menu->setPosition(Vec2::ZERO);
-    this->addChild(menu, 1);
-
-    /////////////////////////////
-    // 3. add your codes below...
-
-    // add a label shows "Hello World"
-    // create and initialize a label
+    auto bg = TMXTiledMap::create("map/red_bg.tmx");
+    this->addChild(bg);
     
-    auto label = Label::createWithTTF("Hello World", "fonts/Marker Felt.ttf", 24);
+    auto logo = Sprite::createWithSpriteFrameName("logo.png");
+    this->addChild(logo);
+    logo->setPosition(cocos2d::Vec2(visibleSize.width/2 , visibleSize.height/2));
     
-    // position the label on the center of the screen
-    label->setPosition(Vec2(origin.x + visibleSize.width/2,
-                            origin.y + visibleSize.height - label->getContentSize().height));
-
-    // add the label as a child to this layer
-    this->addChild(label, 1);
-
-    // add "HelloWorld" splash screen"
-    auto sprite = Sprite::create("HelloWorld.png");
-
-    // position the sprite on the center of the screen
-    sprite->setPosition(Vec2(visibleSize.width/2 + origin.x, visibleSize.height/2 + origin.y));
-
-    // add the sprite as a child to this layer
-    this->addChild(sprite, 0);
+    auto sprite = Sprite::createWithSpriteFrameName("loding4.png");
+    this->addChild(sprite);
+    sprite->setPosition(logo->getPosition() - Vec2(0, logo->getContentSize().height/2+30));
+    
+    /////////////////////////////动画开始//////////////////////////////
+    Animation* animation = Animation::create();
+    for (int i = 1; i <= 4; i++) {
+        __String *frameName = __String::createWithFormat("loding%d.png",i);
+        log("frameName = %s",frameName->getCString());
+        SpriteFrame *spriteFrame = SpriteFrameCache::getInstance()->getSpriteFrameByName(frameName->getCString());
+        animation->addSpriteFrame(spriteFrame);
+    }
+    
+    animation->setDelayPerUnit(0.5f);
+    animation->setRestoreOriginalFrame(true);
+    
+    Animate* action = Animate::create(animation);
+    sprite->runAction(RepeatForever::create(action));
+    ////////////////////////////动画结束////////////////////////////
+    
+    
+    ///////////////////////////异步加载纹理缓存/////////////////////
+    m_nNumberOfLoaded = 0;
+    
+    Director::getInstance()->getTextureCache()->addImageAsync("texture/home_texture.png",
+                                                              CC_CALLBACK_1(HelloWorld::loadingTextureCallBack, this));
+    
+    Director::getInstance()->getTextureCache()->addImageAsync("texture/setting_texture.png",
+                                                              CC_CALLBACK_1(HelloWorld::loadingTextureCallBack, this));
+    
+    Director::getInstance()->getTextureCache()->addImageAsync("texture/gameplay_texture.png",
+                                                              CC_CALLBACK_1(HelloWorld::loadingTextureCallBack, this));
+    
+    _loadingAudioThread = new std::thread(&HelloWorld::loadingAudio,this);
+    /////////////////////////////异步加载纹理缓存结束/////////////////////
+    
     
     return true;
 }
 
-
-void HelloWorld::menuCloseCallback(Ref* pSender)
+void HelloWorld::loadingTextureCallBack(cocos2d::Texture2D *texture)
 {
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_WP8) || (CC_TARGET_PLATFORM == CC_PLATFORM_WINRT)
-	MessageBox("You pressed the close button. Windows Store Apps do not implement a close button.","Alert");
-    return;
-#endif
-
-    Director::getInstance()->end();
-
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
-    exit(0);
-#endif
+    switch (m_nNumberOfLoaded++) {
+        case 0:
+            SpriteFrameCache::getInstance()->addSpriteFramesWithFile("texture/home_texture.plist", texture);
+            log("home texture ok.");
+            break;
+        case 1:
+            SpriteFrameCache::getInstance()->addSpriteFramesWithFile("texture/setting_texture.plist",texture);
+            log("setting texture ok.");
+            break;
+        default:
+            SpriteFrameCache::getInstance()->addSpriteFramesWithFile("texture/gameplay_texture.plist",texture);
+            log("gameplay texture ok.");
+            // 第一个参数是回调，第二个参数是中断事件间隔，第三个参数是回调函数会被执行repeat+1次,kCCRepeatForever时无限次回调;第四个参数时第一次调用延迟时间
+            this->schedule(schedule_selector(HelloWorld::delayCall), 1, 1, 3);
+            break;
+    }
 }
+
+void HelloWorld::delayCall(float dt)
+{
+    log("HelloWorld::delayCall");
+}
+
+void HelloWorld::loadingAudio()
+{
+    log("loading audio.");
+    //初始化音乐
+    SimpleAudioEngine::getInstance()->preloadBackgroundMusic(bg_music_1);
+    SimpleAudioEngine::getInstance()->preloadBackgroundMusic(bg_music_2);
+    
+}
+
+void HelloWorld::onExit()
+{
+    Layer::onExit();
+    _loadingAudioThread->join();
+    CC_SAFE_DELETE(_loadingAudioThread);
+    SpriteFrameCache::getInstance()->removeSpriteFramesFromFile("texture/loading_texture.plist");
+    Director::getInstance()->getTextureCache()->removeTextureForKey("texture/loading_texture.png");
+    this->unschedule(schedule_selector(HelloWorld::delayCall));
+}
+
