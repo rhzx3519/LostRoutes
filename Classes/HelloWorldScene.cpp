@@ -105,7 +105,9 @@ void HelloWorld::loadingTextureCallBack(cocos2d::Texture2D *texture)
 
 void HelloWorld::delayCall(float dt)
 {
-    log("HelloWorld::delayCall");
+//    log("HelloWorld::delayCall");
+    auto sc = HomeMenuLayer::createScene();
+    Director::getInstance()->replaceScene(sc);
 }
 
 void HelloWorld::loadingAudio()
